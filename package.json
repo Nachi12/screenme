@@ -1,0 +1,20 @@
+{
+  "name": "screenme-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n shared,api,web -c cyan,green,lime \"npm run dev --workspace=@screenme/shared\" \"npm run dev --workspace=@screenme/api\" \"npm run dev --workspace=@screenme/web\"",
+    "build": "npm run build --workspace=@screenme/shared && npm run build --workspace=@screenme/api && npm run build --workspace=@screenme/web",
+    "typecheck": "npm run typecheck --workspace=@screenme/shared && npm run typecheck --workspace=@screenme/api && npm run typecheck --workspace=@screenme/web",
+    "test": "npm test --workspace=@screenme/shared && npm test --workspace=@screenme/api && npm test --workspace=@screenme/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
+
