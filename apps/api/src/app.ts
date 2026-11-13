@@ -78,3 +78,4 @@ export function createApp(): express.Application {
   return app;
 }
 
+export default createApp();
