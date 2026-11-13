@@ -222,14 +222,62 @@ async function findAvailablePort(): Promise<number> {
   });
 }
 
+function findMongodBinary(): string | null {
+  const candidates = [
+    process.env.MONGOMS_SYSTEM_BINARY,
+    '/opt/homebrew/bin/mongod',
+    '/usr/local/bin/mongod',
+  ].filter(Boolean) as string[];
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      try {
+        fs.accessSync(c, fs.constants.X_OK);
+        return c;
+      } catch {
+        // continue
+      }
+    }
+  }
+  return null;
+}
+
 async function startLocalTestMongod(): Promise<{
-  proc: ChildProcess;
-  dbDir: string;
+  proc?: ChildProcess;
+  dbDir?: string;
   uri: string;
 }> {
+  // 1. If an explicit test URI is provided and reachable, use it
+  const explicitTestUri = process.env.TEST_MONGODB_URI;
+  if (explicitTestUri) {
+    try {
+      await mongoose.connect(explicitTestUri, { serverSelectionTimeoutMS: 2000 });
+      return { uri: explicitTestUri };
+    } catch {
+      // Explicit test URI unreachable, continue to try local alternatives
+    }
+  }
+
+  // 2. Check if a local MongoDB is already running on standard port 27017
+  const defaultLocalUri = 'mongodb://127.0.0.1:27017/screenme_integration_test';
+  try {
+    await mongoose.connect(defaultLocalUri, { serverSelectionTimeoutMS: 1500 });
+    return { uri: defaultLocalUri };
+  } catch {
+    // Port 27017 not running; proceed to spawn an ephemeral instance
+  }
+
+  // 3. Locate local mongod binary
+  const mongodPath = findMongodBinary();
+  if (!mongodPath) {
+    throw new Error(
+      'MongoDB is required for integration tests. Either start MongoDB (brew services start mongodb-community) or ensure mongod is installed and available.'
+    );
+  }
+
   const port = await findAvailablePort();
   const dbDir = fs.mkdtempSync(path.join('/tmp', 'screenme-mongo-'));
-  const proc = spawn('/usr/local/bin/mongod', [
+  const proc = spawn(mongodPath, [
     '--port',
     String(port),
     '--dbpath',
@@ -237,15 +285,21 @@ async function startLocalTestMongod(): Promise<{
     '--bind_ip',
     '127.0.0.1',
     '--nounixsocket',
+    '--wiredTigerCacheSizeGB',
+    '0.25',
   ]);
 
   await new Promise<void>((resolve, reject) => {
+    let combinedLog = '';
     const timer = setTimeout(() => {
       proc.kill('SIGKILL');
-      reject(new Error(`Timed out waiting for mongod on port ${port}`));
-    }, 15000);
+      reject(
+        new Error(
+          `Timed out (45s) waiting for mongod on port ${port} using ${mongodPath}.\nRecent logs:\n${combinedLog.slice(-1500)}`
+        )
+      );
+    }, 45000);
 
-    let combinedLog = '';
     proc.stdout?.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
       combinedLog += text;
@@ -259,18 +313,18 @@ async function startLocalTestMongod(): Promise<{
     });
     proc.once('exit', (code) => {
       clearTimeout(timer);
-      reject(new Error(`mongod exited early (${code}): ${combinedLog.slice(-800)}`));
+      reject(new Error(`mongod exited early (${code}): ${combinedLog.slice(-1500)}`));
     });
   });
 
   const uri = `mongodb://127.0.0.1:${port}/screenme_test`;
-  await mongoose.connect(uri);
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
   return { proc, dbDir, uri };
 }
 
 describe('ScreenMe API Integration, Security & Regression Tests', () => {
-  let mongodProc: ChildProcess;
-  let mongoTmpDir: string;
+  let mongodProc: ChildProcess | undefined;
+  let mongoTmpDir: string | undefined;
   const app = createApp();
 
   beforeAll(async () => {
@@ -284,7 +338,12 @@ describe('ScreenMe API Integration, Security & Regression Tests', () => {
   });
 
   afterAll(async () => {
-    await mongoose.disconnect();
+    if (mongoose.connection.readyState !== 0) {
+      if (!mongodProc && mongoose.connection.db && mongoose.connection.db.databaseName.includes('test')) {
+        await mongoose.connection.db.dropDatabase().catch(() => {});
+      }
+      await mongoose.disconnect();
+    }
     if (mongodProc) {
       mongodProc.kill('SIGTERM');
     }
