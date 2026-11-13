@@ -8,8 +8,8 @@
   ],
   "scripts": {
     "dev": "concurrently -n shared,api,web -c cyan,green,lime \"npm run dev --workspace=@screenme/shared\" \"npm run dev --workspace=@screenme/api\" \"npm run dev --workspace=@screenme/web\"",
-    "db:start": "mkdir -p .data/db && mongod --dbpath .data/db --logpath .data/mongodb.log --fork",
-    "db:stop": "mongod --dbpath .data/db --shutdown",
+    "db:start": "node scripts/start-mongo.mjs",
+    "db:stop": "mongod --dbpath .data/db --shutdown 2>/dev/null || kill $(lsof -t -i :27017) 2>/dev/null || true",
     "build": "npm run build --workspace=@screenme/shared && npm run build --workspace=@screenme/api && npm run build --workspace=@screenme/web",
     "typecheck": "npm run typecheck --workspace=@screenme/shared && npm run typecheck --workspace=@screenme/api && npm run typecheck --workspace=@screenme/web",
     "test": "npm test --workspace=@screenme/shared && npm test --workspace=@screenme/api && npm test --workspace=@screenme/web",
