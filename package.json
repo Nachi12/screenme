@@ -7,6 +7,7 @@
     "apps/*"
   ],
   "scripts": {
+    "prepare": "npm run build --workspace=@screenme/shared",
     "dev": "npm run db:start && concurrently -n shared,api,web -c cyan,green,lime \"npm run dev --workspace=@screenme/shared\" \"npm run dev --workspace=@screenme/api\" \"npm run dev --workspace=@screenme/web\"",
     "db:start": "node scripts/start-mongo.mjs",
     "db:stop": "mongod --dbpath .data/db --shutdown 2>/dev/null || kill $(lsof -t -i :27017) 2>/dev/null || true",
