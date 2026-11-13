@@ -11,11 +11,22 @@ export function createApp(): express.Application {
   const app = express();
 
   app.set('trust proxy', 1);
-  app.use(helmet());
+
+  const helmetMiddleware = (
+    typeof helmet === 'function'
+      ? helmet
+      : (helmet as unknown as { default: () => express.RequestHandler }).default
+  ) as () => express.RequestHandler;
+  app.use(helmetMiddleware());
 
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  const corsMiddleware = (
+    typeof cors === 'function'
+      ? cors
+      : (cors as unknown as { default: typeof cors }).default
+  );
   app.use(
-    cors({
+    corsMiddleware({
       origin(origin, callback) {
         if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
@@ -27,7 +38,12 @@ export function createApp(): express.Application {
     })
   );
 
-  app.use(cookieParser());
+  const cookieMiddleware = (
+    typeof cookieParser === 'function'
+      ? cookieParser
+      : (cookieParser as unknown as { default: typeof cookieParser }).default
+  );
+  app.use(cookieMiddleware());
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/', (_req, res) => {
