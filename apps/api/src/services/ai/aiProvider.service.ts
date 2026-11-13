@@ -83,9 +83,18 @@ export class GeminiAIProvider implements AIProvider {
     }
 
     const client = new GoogleGenAI({ apiKey: this.apiKey });
+    const modelsToTry = [
+      this.modelId,
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+    ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const currentModel = modelsToTry[attempt % modelsToTry.length] || this.modelId;
       try {
         const timeoutPromise = new Promise<never>((_resolve, reject) => {
           setTimeout(() => {
@@ -100,7 +109,7 @@ export class GeminiAIProvider implements AIProvider {
         });
 
         const apiPromise = client.models.generateContent({
-          model: this.modelId,
+          model: currentModel,
           contents: params.userPrompt,
           config: {
             systemInstruction: params.systemInstruction,
@@ -163,7 +172,7 @@ export class GeminiAIProvider implements AIProvider {
             ),
           },
           provider: this.providerName,
-          modelId: this.modelId,
+          modelId: currentModel,
         };
       } catch (err) {
         lastError = err;
@@ -171,10 +180,13 @@ export class GeminiAIProvider implements AIProvider {
         if (err instanceof AIServiceError && err.code === 'AI_NOT_CONFIGURED') {
           throw err;
         }
+        const errMsg = err instanceof Error ? err.message : String(err);
         logger.warn('AI call attempt failed', {
           attempt,
+          model: currentModel,
           isLast,
           code: err instanceof AIServiceError ? err.code : 'PROVIDER_ERROR',
+          error: errMsg,
         });
         if (!isLast) {
           await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
@@ -186,8 +198,9 @@ export class GeminiAIProvider implements AIProvider {
       throw lastError;
     }
 
+    const lastMsg = lastError instanceof Error ? lastError.message : String(lastError);
     throw new AIServiceError(
-      'Unable to complete AI analysis right now due to an upstream provider error.',
+      `Unable to complete AI analysis: ${lastMsg}`,
       'AI_UNAVAILABLE',
       502
     );

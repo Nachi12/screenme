@@ -20,7 +20,7 @@ const EnvSchema = z
       .transform((v) => v === 'true'),
     AI_PROVIDER: z.enum(['gemini']).default('gemini'),
     GEMINI_API_KEY: z.string().optional().default(''),
-    GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+    GEMINI_MODEL: z.string().default('gemini-flash-lite-latest'),
     AI_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
     AI_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
     MAX_UPLOAD_SIZE_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
