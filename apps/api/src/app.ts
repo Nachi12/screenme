@@ -30,6 +30,27 @@ export function createApp(): express.Application {
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
 
+  app.get('/', (_req, res) => {
+    res.json({
+      name: 'ScreenMe API',
+      status: 'online',
+      version: '1.0.0',
+      description: 'AI Resume Screening, ATS Analysis & HR Evaluation Platform API',
+      endpoints: {
+        health: '/api/v1/health',
+        apiV1: '/api/v1',
+      },
+    });
+  });
+
+  app.get('/api/v1/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.use('/api/v1', createV1Router());
 
   app.use((_req, res) => {
